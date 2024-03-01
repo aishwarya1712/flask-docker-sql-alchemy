@@ -10,6 +10,7 @@ blp = Blueprint("items", __name__, description="Items APIs")
 
 @blp.route("/item/<string:item_id>")
 class Item(MethodView):
+    @blp.response(200, ItemSchema)
     def get(self, item_id):
         try:
             return items[item_id]
@@ -24,6 +25,7 @@ class Item(MethodView):
             abort(404, message="Item not found.")
 
     @blp.arguments(ItemUpdateSchema)
+    @blp.response(200, ItemSchema)
     def put(self, item_data, item_id):
         # the new argument given by ItemUpdateSchema will go in front of all other arguments 
         try:
@@ -36,10 +38,12 @@ class Item(MethodView):
 
 @blp.route("/item")
 class ItemList(MethodView):
+    @blp.response(200, ItemSchema(many=True)) # returns a list of ItemSchemas
     def get(self):
-        return {"items": list(items.values())}
+        return items.values()
 
     @blp.arguments(ItemSchema)
+    @blp.response(200, ItemSchema)
     def post(self, item_data):
         # the JSON that client sends is passed through the ItemSchema, checks for field requirements and data types, and then pass to this method as an argument. 
         for item in items.values():
