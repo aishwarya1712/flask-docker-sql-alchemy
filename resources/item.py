@@ -3,6 +3,7 @@ from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from db import items
+from schemas import ItemSchema, ItemUpdateSchema
 
 # blue print divides data into multiple segments
 blp = Blueprint("items", __name__, description="Items APIs")
@@ -22,10 +23,9 @@ class Item(MethodView):
         except KeyError:
             abort(404, message="Item not found.")
 
-    def put(self, item_id):
-        item_data = request.get_json()
-        if ("price" not in item_data or "name" not in item_data):
-            abort(400, message="Bad Request. Ensure 'price' and 'name' are included in the JSON payload.")
+    @blp.arguments(ItemUpdateSchema)
+    def put(self, item_data, item_id):
+        # the new argument given by ItemUpdateSchema will go in front of all other arguments 
         try:
             item = items[item_id]
             item |= item_data # new operator
@@ -39,12 +39,9 @@ class ItemList(MethodView):
     def get(self):
         return {"items": list(items.values())}
 
-    def post(self):
-        item_data = request.get_json()
-        if("price" not in item_data or "store_id" not in item_data or "name" not in item_data):
-            abort(400, message="Bad Request. Ensure 'price', 'store_id', and 'name' are included in the JSON payload.")
-        if(item_data["store_id"] not in stores):
-            abort(404, message="Store not found")
+    @blp.arguments(ItemSchema)
+    def post(self, item_data):
+        # the JSON that client sends is passed through the ItemSchema, checks for field requirements and data types, and then pass to this method as an argument. 
         for item in items.values():
             # check if item already exists in store
             if(item_data["name"] == item["name"] and item_data["store_id"] == item["store_id"]):
