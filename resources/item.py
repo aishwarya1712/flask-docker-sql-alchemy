@@ -2,8 +2,10 @@ import uuid
 from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
-from db import items
+from sqlalchemy.exc import SQLAlchemyError
+from db import db
 from schemas import ItemSchema, ItemUpdateSchema
+from models import ItemModel
 
 # blue print divides data into multiple segments
 blp = Blueprint("items", __name__, description="Items APIs")
@@ -12,45 +14,49 @@ blp = Blueprint("items", __name__, description="Items APIs")
 class Item(MethodView):
     @blp.response(200, ItemSchema)
     def get(self, item_id):
-        try:
-            return items[item_id]
-        except:
-            abort(404, message="Item not found.")
-
+        item = ItemModel.query.get_or_404(item_id)
+        return item 
+    
     def delete(self, item_id):
-        try:
-            del items[item_id]
-            return {"message": "Item deleted."}
-        except KeyError:
-            abort(404, message="Item not found.")
+        item  = ItemModel.query.get_or_404(item_id)
+        db.session.delete(item)
+        db.session.commit()
+        return {"message": "item deleted"}
 
     @blp.arguments(ItemUpdateSchema)
     @blp.response(200, ItemSchema)
     def put(self, item_data, item_id):
-        # the new argument given by ItemUpdateSchema will go in front of all other arguments 
+        item = ItemModel.query.get(item_id)
+        if item:
+            item.price = item_data["price"]
+            item.name = item_data["name"]
+        else:
+            item = ItemModel(id="item_id", **item_data)
+
         try:
-            item = items[item_id]
-            item |= item_data # new operator
-            return item
-        except KeyError:
-            abort(400, message="Item not found.")
+            db.session.add(item)
+            db.session.commit()
+        except SQLAlchemyError:
+            abort(500, message="Error occured while updating item")
 
 
 @blp.route("/item")
 class ItemList(MethodView):
     @blp.response(200, ItemSchema(many=True)) # returns a list of ItemSchemas
     def get(self):
-        return items.values()
+        return ItemModel.query.all()
 
     @blp.arguments(ItemSchema)
     @blp.response(200, ItemSchema)
     def post(self, item_data):
-        # the JSON that client sends is passed through the ItemSchema, checks for field requirements and data types, and then pass to this method as an argument. 
-        for item in items.values():
-            # check if item already exists in store
-            if(item_data["name"] == item["name"] and item_data["store_id"] == item["store_id"]):
-                abort(400, "Item already exists in given store.")
-        new_item_id = uuid.uuid4().hex
-        new_item = {**item_data, "id": new_item_id}
-        items[new_item_id] = new_item
-        return new_item, 201
+        # uniqueness of name and item already checked in the models, so we dont have to check here. 
+        item = ItemModel(**item_data) # converts dictionary to keyword arguments
+
+        # save it to db
+        try:
+            db.session.add(item)
+            db.session.commit()
+        except SQLAlchemyError:
+            abort(500, message="Error occured while inserting item")
+
+        return item, 201
